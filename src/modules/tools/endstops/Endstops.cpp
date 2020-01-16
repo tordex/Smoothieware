@@ -493,7 +493,7 @@ void Endstops::back_off_home(axis_bitmap_t axis)
     float slow_rate= NAN; // default mm/sec
 
     // these are handled differently
-    if(is_delta) {
+    if(is_delta || is_rdelta) {
         // Move off of the endstop using a regular relative move in Z only
         params.push_back({'Z', THEROBOT->from_millimeters(homing_axis[Z_AXIS].retract * (homing_axis[Z_AXIS].home_direction ? 1 : -1))});
         slow_rate= homing_axis[Z_AXIS].slow_rate;
@@ -903,7 +903,17 @@ void Endstops::process_home_command(Gcode* gcode)
             // without endstop trim, real_position == ideal_position
             if(is_rdelta) {
                 // with a rotary delta we set the actuators angle then use the FK to calculate the resulting cartesian coordinates
-                ActuatorCoordinates real_actuator_position = {ideal_position[0], ideal_position[1], ideal_position[2]};
+                // BUT homing position in cartesian
+                float ideal_position[3] = {
+                        homing_axis[X_AXIS].homing_position,
+                        homing_axis[Y_AXIS].homing_position,
+                        homing_axis[Z_AXIS].homing_position
+                };
+                ActuatorCoordinates real_actuator_position;
+                THEROBOT->arm_solution->cartesian_to_actuator(ideal_position, real_actuator_position);
+                real_actuator_position[X_AXIS] += homing_axis[X_AXIS].home_offset;
+                real_actuator_position[Y_AXIS] += homing_axis[Y_AXIS].home_offset;
+                real_actuator_position[Z_AXIS] += homing_axis[Z_AXIS].home_offset;
                 THEROBOT->reset_actuator_position(real_actuator_position);
 
             } else {
