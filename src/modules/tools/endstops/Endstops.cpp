@@ -535,7 +535,7 @@ void Endstops::back_off_home(axis_bitmap_t axis)
 // If enabled will move the head to 0,0 after homing, but only if X and Y were set to home
 void Endstops::move_to_origin(axis_bitmap_t axis)
 {
-    if(!is_delta && (!axis[X_AXIS] || !axis[Y_AXIS])) return; // ignore if X and Y not homing, unless delta
+    if(!(is_delta || is_rdelta) && (!axis[X_AXIS] || !axis[Y_AXIS])) return; // ignore if X and Y not homing, unless delta
 
     if(park_after_home) {
         // do park instead of goto origin
@@ -900,10 +900,8 @@ void Endstops::process_home_command(Gcode* gcode)
             THEROBOT->reset_axis_position(real_position[0], real_position[1], real_position[2]);
 
         } else {
-            // without endstop trim, real_position == ideal_position
+            // on rotary delta homing_position is cartesian, home_offset is actuator position
             if(is_rdelta) {
-                // with a rotary delta we set the actuators angle then use the FK to calculate the resulting cartesian coordinates
-                // BUT homing position in cartesian
                 float ideal_position[3] = {
                         homing_axis[X_AXIS].homing_position,
                         homing_axis[Y_AXIS].homing_position,
@@ -911,10 +909,15 @@ void Endstops::process_home_command(Gcode* gcode)
                 };
                 ActuatorCoordinates real_actuator_position;
                 THEROBOT->arm_solution->cartesian_to_actuator(ideal_position, real_actuator_position);
-                real_actuator_position[X_AXIS] += homing_axis[X_AXIS].home_offset;
-                real_actuator_position[Y_AXIS] += homing_axis[Y_AXIS].home_offset;
-                real_actuator_position[Z_AXIS] += homing_axis[Z_AXIS].home_offset;
-                THEROBOT->reset_actuator_position(real_actuator_position);
+                // Actuators are inverted on rotary delta so trim must be added ()
+                real_actuator_position[X_AXIS] += homing_axis[X_AXIS].home_offset + this->trim_mm[X_AXIS];
+                real_actuator_position[Y_AXIS] += homing_axis[Y_AXIS].home_offset + this->trim_mm[Y_AXIS];
+                real_actuator_position[Z_AXIS] += homing_axis[Z_AXIS].home_offset + this->trim_mm[Z_AXIS];
+                float real_position[3];
+                THEROBOT->arm_solution->actuator_to_cartesian(real_actuator_position, real_position);
+                // Reset the actuator positions to correspond to our real position to make
+                // like on delta: Positive values will crash physical endstops
+                THEROBOT->reset_axis_position(real_position[0], real_position[1], real_position[2]);
 
             } else {
                 // Reset the actuator positions to correspond to our real position
@@ -952,7 +955,7 @@ void Endstops::process_home_command(Gcode* gcode)
 
     // on some systems where 0,0 is bed center it is nice to have home goto 0,0 after homing
     // default is off for cartesian and on for deltas
-    if(!is_delta) {
+    if(!is_delta && !is_rdelta) {
         // NOTE a rotary delta usually has optical or hall-effect endstops so it is safe to go past them a little bit
         move_to_origin(haxis);
         // if limit switches are enabled we must back off endstop after setting home
@@ -1162,7 +1165,7 @@ void Endstops::on_gcode_received(void *argument)
                         homing_axis[X_AXIS].home_offset, homing_axis[Y_AXIS].home_offset, homing_axis[Z_AXIS].home_offset);
                 }
 
-                if (this->is_delta || this->is_scara) {
+                if (this->is_delta || this->is_scara || this->is_rdelta) {
                     gcode->stream->printf(";Trim (mm):\nM666 X%1.3f Y%1.3f Z%1.3f\n", trim_mm[0], trim_mm[1], trim_mm[2]);
                     gcode->stream->printf(";Max Z\nM665 Z%1.3f\n", homing_axis[Z_AXIS].homing_position);
                 }
@@ -1183,7 +1186,7 @@ void Endstops::on_gcode_received(void *argument)
                 break;
 
             case 666:
-                if(this->is_delta || this->is_scara) { // M666 - set trim for each axis in mm, NB negative mm trim is down
+                if(this->is_delta || this->is_rdelta || this->is_scara) { // M666 - set trim for each axis in mm, NB negative mm trim is down
                     if (gcode->has_letter('X')) trim_mm[0] = gcode->get_value('X');
                     if (gcode->has_letter('Y')) trim_mm[1] = gcode->get_value('Y');
                     if (gcode->has_letter('Z')) trim_mm[2] = gcode->get_value('Z');
