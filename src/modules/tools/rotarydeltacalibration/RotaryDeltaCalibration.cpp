@@ -73,8 +73,11 @@ void RotaryDeltaCalibration::on_gcode_received(void *argument)
                 if (gcode->has_letter('L') && gcode->get_value('L') != 0) {
                     // specifying L1 it will take the last probe position (set by G30 or G38.x ) and set the home offset based on that
                     // this allows the use of G30 to find the angle tool
+                    // Note: both now both G30 and G38.x save mm in last probe position
                     uint8_t ok;
-                    std::tie(current_angle[0], current_angle[1], current_angle[2], ok) = THEROBOT->get_last_probe_position();
+                    float last_probe[3];
+                    std::tie(last_probe[0], last_probe[1], last_probe[2], ok) = THEROBOT->get_last_probe_position();
+                    THEROBOT->arm_solution->cartesian_to_actuator(last_probe, current_angle);
                     if(ok == 0) {
                         gcode->stream->printf("error:Nothing set as probe failed or not run\n");
                         return;
@@ -93,7 +96,7 @@ void RotaryDeltaCalibration::on_gcode_received(void *argument)
                     // Calculate home_offset from current position
                     cnt = 3;
                     float new_pos[3];
-                    THEROBOT->get_current_machine_position(new_pos);
+                    THEROBOT->arm_solution->actuator_to_cartesian(current_angle, new_pos);
                     if (gcode->has_letter('X')) {
                         float val = gcode->get_value('X');
                         new_pos[X_AXIS] = val;
