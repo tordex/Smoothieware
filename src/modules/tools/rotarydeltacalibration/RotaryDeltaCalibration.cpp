@@ -10,6 +10,7 @@
 #include "PublicData.h"
 #include "Gcode.h"
 #include "StepperMotor.h"
+#include "BaseSolution.h"
 
 #define rotarydelta_checksum CHECKSUM("rotary_delta_calibration")
 #define enable_checksum CHECKSUM("enable")
@@ -88,24 +89,55 @@ void RotaryDeltaCalibration::on_gcode_received(void *argument)
 
                 int cnt= 0;
 
-                //figure out what home_offset needs to be to correct the homing_position
-                if (gcode->has_letter('A')) {
-                    float a = gcode->get_value('A'); // what actual angle is
-                    theta_offset[0] -= (current_angle[0] - a);
-                    current_angle[0]= a;
-                    cnt++;
-                }
-                if (gcode->has_letter('B')) {
-                    float b = gcode->get_value('B');
-                    theta_offset[1] -= (current_angle[1] - b);
-                    current_angle[1]= b;
-                    cnt++;
-                }
-                if (gcode->has_letter('C')) {
-                    float c = gcode->get_value('C');
-                    theta_offset[2] -= (current_angle[2] - c);
-                    current_angle[2]= c;
-                    cnt++;
+                if (gcode->has_letter('X') || gcode->has_letter('Y') || gcode->has_letter('Z')) {
+                    // Calculate home_offset from current position
+                    cnt = 3;
+                    float new_pos[3];
+                    THEROBOT->get_current_machine_position(new_pos);
+                    if (gcode->has_letter('X')) {
+                        float val = gcode->get_value('X');
+                        new_pos[X_AXIS] = val;
+                    }
+                    if (gcode->has_letter('Y')) {
+                        float val = gcode->get_value('X');
+                        new_pos[Y_AXIS] = val;
+                    }
+                    if (gcode->has_letter('Z')) {
+                        float val = gcode->get_value('Z');
+                        new_pos[Z_AXIS] = val;
+                    }
+                    ActuatorCoordinates new_angle;
+                    THEROBOT->arm_solution->cartesian_to_actuator(new_pos, new_angle);
+
+                    theta_offset[X_AXIS] -= (current_angle[X_AXIS] -  new_angle[X_AXIS]);
+                    current_angle[X_AXIS] = new_angle[X_AXIS];
+
+                    theta_offset[Y_AXIS] -= (current_angle[Y_AXIS] -  new_angle[Y_AXIS]);
+                    current_angle[Y_AXIS] = new_angle[Y_AXIS];
+
+                    theta_offset[Z_AXIS] -= (current_angle[Z_AXIS] -  new_angle[Z_AXIS]);
+                    current_angle[Z_AXIS] = new_angle[Z_AXIS];
+                } else
+                {
+                    //figure out what home_offset needs to be to correct the homing_position
+                    if (gcode->has_letter('A')) {
+                        float a = gcode->get_value('A'); // what actual angle is
+                        theta_offset[0] -= (current_angle[0] - a);
+                        current_angle[0] = a;
+                        cnt++;
+                    }
+                    if (gcode->has_letter('B')) {
+                        float b = gcode->get_value('B');
+                        theta_offset[1] -= (current_angle[1] - b);
+                        current_angle[1] = b;
+                        cnt++;
+                    }
+                    if (gcode->has_letter('C')) {
+                        float c = gcode->get_value('C');
+                        theta_offset[2] -= (current_angle[2] - c);
+                        current_angle[2] = c;
+                        cnt++;
+                    }
                 }
 
                 PublicData::set_value( endstops_checksum, home_offset_checksum, theta_offset );
