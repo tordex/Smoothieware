@@ -287,7 +287,7 @@ void ZProbe::on_gcode_received(void *argument)
 
         if( gcode->g == 30 ) { // simple Z probe
 
-            bool set_z= (gcode->has_letter('Z') && !is_rdelta);
+            bool set_z= gcode->has_letter('Z');
             bool probe_result;
             bool reverse= (gcode->has_letter('R') && gcode->get_value('R') != 0); // specify to probe in reverse direction
             float rate= gcode->has_letter('F') ? gcode->get_value('F') / 60 : this->slow_feedrate;
