@@ -29,6 +29,7 @@
 
 // strategies we know about
 #include "DeltaCalibrationStrategy.h"
+#include "RotaryDeltaStrategy.h"
 #include "ThreePointStrategy.h"
 #include "DeltaGridStrategy.h"
 #include "CartGridStrategy.h"
@@ -93,6 +94,11 @@ void ZProbe::config_load()
             switch(cs) {
                 case delta_calibration_strategy_checksum:
                     ls= new DeltaCalibrationStrategy(this);
+                    found= true;
+                    break;
+
+                case rotary_delta_strategy_checksum:
+                    ls= new RotaryDeltaStrategy(this);
                     found= true;
                     break;
 
