@@ -314,12 +314,6 @@ bool DeltaGridStrategy::handleGcode(Gcode *gcode)
 
         } else if( gcode->g == 31 ) { // do a grid probe
 
-            if(is_square) {
-                // Handle deprecated is_square
-                gcode->stream->printf("Error: is_square has been removed, please use the new rectangular_grid strategy instead\n");
-                return false;
-            }
-
             // first wait for an empty queue i.e. no moves left
             THEKERNEL->conveyor->wait_for_idle();
 
@@ -469,9 +463,11 @@ bool DeltaGridStrategy::doProbe(Gcode *gc)
         for (int xCount = xStart; xCount != xStop; xCount += xInc) {
             float xProbe = LEFT_PROBE_BED_POSITION + AUTO_BED_LEVELING_GRID_X * xCount;
 
-            // Avoid probing the corners (outside the round or hexagon print surface) on a delta printer.
-            float distance_from_center = sqrtf(xProbe * xProbe + yProbe * yProbe);
-            if (distance_from_center > radius) continue;
+            if(!is_square) {
+                // Avoid probing the corners (outside the round or hexagon print surface) on a delta printer.
+                float distance_from_center = sqrtf(xProbe * xProbe + yProbe * yProbe);
+                if (distance_from_center > radius) continue;
+            }
 
             if(!zprobe->doProbeAt(mm, xProbe - X_PROBE_OFFSET_FROM_EXTRUDER, yProbe - Y_PROBE_OFFSET_FROM_EXTRUDER)) return false;
             float measured_z = zprobe->getProbeHeight() - mm - z_reference; // this is the delta z from bed at 0,0
@@ -480,7 +476,9 @@ bool DeltaGridStrategy::doProbe(Gcode *gc)
         }
     }
 
-    extrapolate_unprobed_bed_level();
+    if(!is_square) {
+        extrapolate_unprobed_bed_level();
+    }
     print_bed_level(gc->stream);
 
     setAdjustFunction(true);
